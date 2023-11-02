@@ -1,0 +1,30 @@
+{
+  "name": "ts-collections",
+  "version": "1.0.0",
+  "description": "Collections for array and objects data. Heavily faithful to Laravel implementation.",
+  "packageManager": "pnpm@8.10.1",
+  "main": "index.js",
+  "scripts": {
+    "compile": "tsc",
+    "prepublishOnly": "npm run compile",
+    "test": "jest",
+    "docs": "typedoc",
+    "docs-dev": "typedoc --watch"
+  },
+  "keywords": [
+    "laravel",
+    "collections"
+  ],
+  "author": "maicol07",
+  "license": "MIT",
+  "devDependencies": {
+    "@maicol07/eslint-config": "^2.3.0",
+    "@types/jest": "^29.5.7",
+    "@types/node": "^20.8.10",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.1",
+    "typedoc": "^0.25.3",
+    "typescript": "^5.2.2"
+  }
+}

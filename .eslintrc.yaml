@@ -1,0 +1,6 @@
+root: true
+extends:
+  - '@maicol07'
+rules:
+  no-param-reassign: off
+  'import/no-cycle': off

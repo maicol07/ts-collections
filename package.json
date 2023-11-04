@@ -5,11 +5,11 @@
   "packageManager": "pnpm@8.10.1",
   "main": "index.js",
   "scripts": {
-    "compile": "tsc",
-    "prepublishOnly": "npm run compile",
-    "test": "jest",
-    "docs": "typedoc",
-    "docs-dev": "typedoc --watch"
+    "build": "tsc",
+    "build:docs": "typedoc",
+    "dev:docs": "typedoc --watch",
+    "prepublishOnly": "npm run build",
+    "test": "jest"
   },
   "keywords": [
     "laravel",

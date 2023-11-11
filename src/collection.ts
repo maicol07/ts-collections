@@ -1,16 +1,26 @@
 import {dataGet, value} from './helpers';
+import {match} from 'ts-pattern';
 
-export class Collection<K extends string | number | symbol = number, V = unknown> implements Iterable<[string, V]> {
+export type CollectionKeyType = string | number;
+export type CollectionInputType<K extends CollectionKeyType = string, V = unknown> = V[] | [K, V][] | Iterable<V> | Collection<K, V> | Record<K, V> | Map<K, V>;
+
+export class Collection<K extends CollectionKeyType = string, V = unknown> implements Iterable<V> {
+  [index: number]: V;
   /**
    * The items contained in the collection
    */
-  private items: Record<K, V>;
+  private items: Map<K, V>;
 
   /**
-   * Create a new collection.
+   * Creates a new instance of the Collection class.
+   *
+   * @param items - Items to be added to the collection.
+   *
+   * @return A new Proxy object for the Collection instance.
+   *
+   * @throws {TypeError} If the items parameter is not of type V, V array, iterable, Collection, or Record<string, V>.
    */
-  constructor(items?: V | V[] | Collection<K, V> | Record<string, V>) {
-    // @ts-ignore
+  constructor(items: CollectionInputType<K, V> = []) {
     this.items = this.getObjectableItems(items);
 
     return new Proxy(this, {
@@ -26,30 +36,17 @@ export class Collection<K extends string | number | symbol = number, V = unknown
     });
   }
 
-  itCount = 0;
+  itCount: K | undefined;
 
   * [Symbol.iterator]() {
-    // @ts-ignore
-    yield this.get(this.itCount);
-  }
-
-  /**
-   * Create a collection with the given range.
-   *
-   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/from#sequence_generator_range
-   * @return static
-   */
-  public static range(start: number, stop: number, step = 1) {
-    return new Collection(
-      Array.from({length: (stop - start) / step + 1}, (_, index) => start + (index * step))
-    );
+    yield this.get(this.itCount!);
   }
 
   /**
    * Get all the items in the collection.
    */
-  public all() {
-    return this.isArray() ? this.values() : this.items;
+  public all(): K extends number ? V[] : Map<K, V> {
+    return (this.isArray() ? this.values().all() : this.items) as K extends number ? V[] : Map<K, V>;
   }
 
   /**
@@ -65,7 +62,7 @@ export class Collection<K extends string | number | symbol = number, V = unknown
   public avg(callback?: ((item: V) => unknown) | string) {
     const mapper = this.valueRetriever(callback);
 
-    const items = this.map((item) => mapper(item)).filter((item) => item !== null);
+    const items = this.map((item) => mapper(item)).filter();
 
     const count = items.count();
     if (count) {
@@ -75,10 +72,8 @@ export class Collection<K extends string | number | symbol = number, V = unknown
     return Number.NaN;
   }
 
-  /**
-   * Chunk the collection into chunks of the given size
-   */
-  // public chunk(size: number): Collection<Collection<V>> {
+  // public chunk(size: number): Collection<number, Collection<K, V>> {
+  //
   //   if (size <= 0) {
   //     return new Collection();
   //   }
@@ -94,19 +89,18 @@ export class Collection<K extends string | number | symbol = number, V = unknown
   //
   //   return new Collection(chunks);
   // }
-
   /**
    * Collapse the collection of items into a single array.
    */
   public collapse() {
-    return new Collection(this.values().flat(Number.POSITIVE_INFINITY));
+    return new Collection(this.values().flatten(Number.POSITIVE_INFINITY));
   }
 
   /**
    * Collect the values into a collection.
    */
   public collect() {
-    return new Collection(this.all());
+    return new Collection<K, V>(this.all());
   }
 
   /**
@@ -138,43 +132,54 @@ export class Collection<K extends string | number | symbol = number, V = unknown
 
 
   /**
-   * Determine if an item is contained in the collection.
+   * Determine if an item exists in the collection.
    *
-   * @param item {any} The item to search for.
-   * @param item {[string, any]} The entry (key-value pair) of the item to search for.
-   * @param item {(value, key) => boolean} Predicate to test every entry
+   * @param  key
+   * @param  operator
+   * @param  value
+   * @return boolean
    */
-  public contains(item: V | ((value: V, key: string) => boolean) | [string, V | unknown]) {
-    let callback: (value: V, key: string) => boolean = () => false;
-    if (this.useAsCallable(item)) {
-      callback = item as (value: V, key: string) => boolean;
-    }
+  public contains(key: ((value: V, key: K) => boolean) | V, operator: any = null, value: any = null): boolean {
+    if (arguments.length === 1) {
+      if (typeof key === 'function') {
+        let placeholder = {};
 
-    if (Array.isArray(item)) {
-      // @ts-ignore
-      callback = (value, key) => [key, value] === item;
-    }
-
-    if (callback) {
-      let result = false;
-
-      for (const [key, value] of this.entries()) {
-        // @ts-ignore
-        result = callback(value, key);
-        if (result) {
-          return result;
-        }
+        return this.first(key as (value: V, key: K) => boolean, placeholder) !== placeholder;
       }
+
+      return [...this.items.values()].includes(key);
     }
+
+    return this.contains(this.operatorForWhere(...arguments));
   }
+
+  /**
+   * Determine if an item exists, using strict comparison.
+   *
+   * @param key   A function that returns a boolean type, a TValue, or an array key
+   * @param value  A TValue or null
+   * @return boolean
+   */
+  public containsStrict(key: ((item: V) => boolean) | V, value: any = null): boolean {
+    if (arguments.length === 2) {
+      return this.contains((item: any) => dataGet(item, key) === value);
+    }
+
+    if (typeof key === 'function') {
+      return this.first(key as (item: V) => boolean) !== null;
+    }
+
+    return this.contains(key);
+  }
+
+  // TODO: crossJoin, diff, diffUsing, diffAssoc, diffAssocUsing, diffKeys, diffKeysUsing, duplicates, duplicatesStrict,
 
   /**
    * Count the amount of items in the collection.
    */
   public count() {
-    return this.keys().length;
+    return this.items.size;
   }
-
   /**
    * Dump the items and end the script execution.
    */
@@ -193,24 +198,24 @@ export class Collection<K extends string | number | symbol = number, V = unknown
   /**
    * Get the items in the collection that are not present in the given items.
    */
-  public diff(items: V) {
-    const itemsValues = Object.values(this.getObjectableItems(items));
+  public diff(items: CollectionInputType<K, V>) {
+    const itemsValues = [...this.getObjectableItems(items).values()];
     return new Collection(this.values().filter((v) => !itemsValues.includes(v)));
   }
 
   /**
    * Get the items in the collection that are not present in the given items.
    */
-  public diffAssoc(items: V) {
-    // const itemsEntries = Object.entries(this.getObjectableItems(items));
-    // return new Collection(this.values().filter((v) => !itemsEntries.includes(v)));
+  public diffAssoc(items: CollectionInputType<K, V>) {
+    const itemsEntries = [...this.getObjectableItems(items).entries()];
+    return new Collection(this.entries().filter((v) => !itemsEntries.includes(v)));
   }
 
   /**
    * Get the items in the collection that are not present in the given items.
    */
-  public diffKeys(items: V) {
-    const itemsKeys = Object.keys(this.getObjectableItems(items));
+  public diffKeys(items: CollectionInputType<K, V>) {
+    const itemsKeys = [...this.getObjectableItems(items).keys()]
     return new Collection(this.keys().filter((v) => !itemsKeys.includes(v)));
   }
 
@@ -221,7 +226,7 @@ export class Collection<K extends string | number | symbol = number, V = unknown
    * @param item {[string, any]} The entry (key-value pair) of the item to search for.
    * @param item {(value, key) => boolean} Predicate to test every entry
    */
-  public doesntContain(item: V | ((value: V, key: string) => boolean) | [string, V | unknown]) {
+  public doesntContain(item: V | ((value: V, key: K) => boolean)) {
     return !this.contains(item);
   }
 
@@ -236,9 +241,27 @@ export class Collection<K extends string | number | symbol = number, V = unknown
    * Retrieve duplicate items from the collection.
    * TODO: To finish
    */
-  public duplicates(callback?: string | ((item: V) => string)) {
-    const items = this.valueRetriever(callback);
-    //const unique = items.unique();
+  // public duplicates(callback?: string | ((item: V) => string)) {
+  //   const items = this.valueRetriever(callback);
+  //   //const unique = items.unique();
+  // }
+
+  /**
+   * Execute a callback over each item.
+   *
+   * @param callback - The callback function to be applied to each element.
+   *                   The callback should accept two parameters: item and key.
+   *                   The item parameter represents the value of the current element.
+   *                   The key parameter represents the key of the current element.
+   * @return Returns the collection itself.
+   */
+  public each(callback: (item: V, key: CollectionKeyType) => unknown) {
+    for (const [key, value] of this.entries()) {
+      if (callback(value, key) === false) {
+        break;
+      }
+    }
+    return this;
   }
 
   /**
@@ -246,21 +269,51 @@ export class Collection<K extends string | number | symbol = number, V = unknown
    * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/entries
    */
   public entries() {
-    return Object.entries(this.items);
+    return [...this.items.entries()];
+  }
+
+  public every(key: (value: V, key: K) => boolean | V, operator?: unknown, value?: unknown): boolean {
+    if (arguments.length === 1) {
+      const callback = this.valueRetriever(key);
+      for (const [key, value] of this) {
+        if (!callback(value, key)) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    return this.every(this.operatorForWhere(...arguments));
   }
 
   /**
    * Run a filter over each of the items.
    */
-  public filter(callback?: (value: V, key: string) => boolean) {
-    if (callback) {
-      return new Collection(
-        // @ts-ignore
-        Object.fromEntries(this.entries().filter(([key, item]) => callback(item, key)))
-      );
+  public filter(callback?: (value: V, key: K) => boolean): Collection<K, V> {
+    return new Collection(this.entries().filter(([key, value]) => callback ? callback(value, key) : Boolean(value)));
+  }
+
+  public first<D>(callback?: (value: V, key: K) => boolean, defaultValue?: D | (() => D)): V | D | undefined {
+    if (!callback) {
+      if (this.items.size === 0) {
+        return value(defaultValue);
+      }
+
+      return this.items.values().next().value;
     }
 
-    return new Collection(this.values().filter(Boolean));
+    for (let [key, value] of this.items) {
+      if (callback(value, key)) {
+        return value;
+      }
+    }
+
+    return value(defaultValue);
+  }
+
+  public flatten(depth: number = 1): Collection<number, unknown> {
+    return new Collection(this.values().flatten(depth));
   }
 
   /**
@@ -268,7 +321,7 @@ export class Collection<K extends string | number | symbol = number, V = unknown
    */
   public get(key: K, fallback?: any) {
     if (key in this.items) {
-      return this.items[key];
+      return this.items.get(key);
     }
 
     return value(fallback);
@@ -282,32 +335,116 @@ export class Collection<K extends string | number | symbol = number, V = unknown
    * Get the keys of the collection items.
    */
   public keys() {
-    return Object.keys(this.items);
+    return new Collection<number, K>(this.items.keys());
   }
 
   /**
    * Run a map over each of the items.
    */
-  public map<T>(callback: (item: V, key: string) => T) {
-    const newObject = Object.fromEntries<T>(
-      // @ts-ignore
-      this.entries().map(([key, item]) => [key, callback(item, key)])
-    );
+  public map<T>(callback: (item: V, key: K) => T) {
+    const newObject = Object.fromEntries<T>(this.entries().map(([key, item]) => [key, callback(item, key)]));
     return new Collection(newObject);
+  }
+
+  /**
+   * Chunk the collection into chunks of the given size
+   */
+
+  public median(key?: K) {
+    const values = (key ? this.pluck(key) : this)
+      .filter()
+      .sort()
+      .values();
+    const count = values.count();
+
+    if (count === 0) {
+      return Number.NaN;
+    }
+
+    const middle = Math.floor(count / 2);
+
+    if (count % 2) {
+      return values.get(middle);
+    }
+
+    return (values.get(middle - 1) + values.get(middle)) / 2;
+  }
+
+  public mode(key?: K) {
+    if (this.count() === 0) {
+      return Number.NaN;
+    }
+
+    const collection: Collection<any, any> = key ? this.pluck(key) : this;
+    const counts = new Collection<number, number>();
+    collection.each((value) => counts[value] = counts[value] ? counts[value] + 1 : 1);
+
+    /*
+        $sorted = $counts->sort();
+
+        $highestValue = $sorted->last();
+
+        return $sorted->filter(fn ($value) => $value == $highestValue)
+      ->sort()->keys()->all();
+    */
+    let sorted = counts.sort();
+
+    let highestValue: number = sorted.last();
+
+    return sorted.filter((value: number) => value == highestValue)
+      .sort().map((value, index) => index);
+  }
+
+  public pluck(value: string | number, key?: string | number) {
+    let results = new Collection();
+
+    const v = typeof value === 'string' ? value.split('.') : value;
+    const k = typeof key === 'string' ? key.split('.') : key;
+
+    for (let [, item] of this.items) {
+      let itemValue = dataGet(item, value);
+
+      // If the key is "null", we will just append the value to the array and keep
+      // looping. Otherwise, we will key the array using the value of the key we
+      // received from the developer. Then we'll return the final array form.
+      if (!key) {
+        results.put('0', itemValue);
+      } else {
+        let itemKey = dataGet(item, key) as string | object;
+
+        if (itemKey && typeof itemKey === "object") {
+          itemKey = itemKey.toString();
+        }
+
+        results.put(itemKey, itemValue);
+      }
+    }
+
+    return results;
   }
 
   /**
    * Put an item in the collection by key.
    */
-  public put(key: string, newValue: V) {
-    if (this.isArray() && Number.isNaN(Number.parseInt(key, 10))) {
-      // @ts-ignore
-      this.items = {};
+  public put(key: K, newValue: V) {
+    if (this.isArray() && Number.isNaN(Number.parseInt(key as string, 10))) {
+      this.items = new Map();
     }
 
-    // @ts-ignore
-    this.items[key] = newValue;
+    this.items.set(key, newValue);
     return this;
+  }
+
+  /**
+   * Create a collection with the given range.
+   *
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/from#sequence_generator_range
+   * @return static
+   */
+  public static range(start: number, stop: number, step = 1) {
+    return new Collection(
+      Array.from({length: (stop - start) / step + 1}, (_, index) => start + (index * step))
+    );
   }
 
   /**
@@ -323,6 +460,10 @@ export class Collection<K extends string | number | symbol = number, V = unknown
     return result;
   }
 
+  public sort(callback?: (a: V, b: V) => number) {
+    return new Collection<K, V>(this.entries().sort(((a, b) => callback ? callback(a[1], b[1]) : String(a[1]).localeCompare(String(b[1])))));
+  }
+
   /**
    * Get the sum of the given values.
    */
@@ -332,29 +473,29 @@ export class Collection<K extends string | number | symbol = number, V = unknown
     return this.reduce((result, item) => result as number + (callback(item) as number), 0);
   }
 
+  /**
+   * Reset the keys on the underlying array.
+   */
   public values() {
-    return Object.values(this.items);
+    return new Collection<number, V>(this.items.values());
   }
 
   /**
    * Prepare items to be added to the {@link items} property.
    */
-  protected getObjectableItems(items?: V | V[] | Collection<K, V> | Record<K, V>) {
-    let localItems = items;
-    if (localItems instanceof Collection) {
-      // @ts-ignore
-      localItems = localItems.all();
-    }
-
-    if (Array.isArray(localItems)) {
-      return Object.fromEntries(localItems.entries());
-    }
-
-    if (localItems && typeof localItems !== 'object') {
-      return {0: localItems};
-    }
-
-    return localItems ?? {};
+  protected getObjectableItems(items: CollectionInputType<K, V>): Map<K, V> {
+    return match(items)
+      .returnType<Map<K, V>>()
+      .when((value) => value instanceof Collection, (value: Collection<K, V>) => {
+        const values = value.all();
+        return Array.isArray(values) ? new Map(values.map((item, index) => [index as K, item])) : this.getObjectableItems(values);
+      })
+      .when((value) => value instanceof Map, (value: Map<K, V>) => value)
+      // .when((value) => value instanceof Set, (value: Set<V>) => new Map<K, V>(value.entries()))
+      .when((value) => Array.isArray(value), (value: V[] | [K, V][]) => {
+        return value.every((item) => Array.isArray(item) && item.length == 2) ? new Map(value as [K, V][]) : new Map((value as V[]).map((item, index) => [index as K, item]));
+      })
+      .otherwise((value) => new Map(Object.entries(value)) as Map<K, V>);
   }
 
   /**
@@ -365,18 +506,11 @@ export class Collection<K extends string | number | symbol = number, V = unknown
   }
 
   /**
-   * Determine if the given value is callable, but not a string.
-   */
-  protected useAsCallable(item: any) {
-    return typeof item !== 'string' && typeof item === 'function';
-  }
-
-  /**
    * Get a value retrieving callback.
    */
-  protected valueRetriever(callback?: ((item: V) => unknown) | string) {
-    if (this.useAsCallable(callback)) {
-      return callback as (item: V) => unknown;
+  protected valueRetriever(callback?: Function | string) {
+    if (typeof callback === 'function') {
+      return callback;
     }
 
     return (item: V) => dataGet(item, callback as string);

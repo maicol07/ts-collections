@@ -26,5 +26,8 @@
     "ts-node": "^10.9.1",
     "typedoc": "^0.25.3",
     "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "ts-pattern": "^5.0.5"
   }
 }

@@ -59,8 +59,8 @@ There are some little differences between Laravel Collections and TS Collections
 * [x] collect
 * [x] combine
 * [x] concat
-* [-] contains
-* [ ] containsOneItem
+* [x] contains
+* [x] containsOneItem
 * [x] containsStrict
 * [x] count
 * [ ] countBy
@@ -102,10 +102,10 @@ There are some little differences between Laravel Collections and TS Collections
 * [ ] join
 * [ ] keyBy
 * [x] keys
-* [ ] last
+* [x] last
 * [ ] lazy
 * [ ] macro
-* [ ] make
+* [x] make
 * [x] map
 * [ ] mapInto
 * [ ] mapSpread

@@ -1,10 +1,10 @@
 import {dataGet, value} from './helpers';
-import {match} from 'ts-pattern';
+import {match, P} from 'ts-pattern';
 
 export type CollectionKeyType = string | number;
 export type CollectionInputType<K extends CollectionKeyType = string, V = unknown> = V[] | [K, V][] | Iterable<V> | Collection<K, V> | Record<K, V> | Map<K, V>;
 
-export class Collection<K extends CollectionKeyType = string, V = unknown> implements Iterable<V> {
+export class Collection<K extends CollectionKeyType = string, V = unknown> implements Iterable<[K, V]> {
   [index: number]: V;
   /**
    * The items contained in the collection
@@ -16,37 +16,21 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    *
    * @param items - Items to be added to the collection.
    *
-   * @return A new Proxy object for the Collection instance.
-   *
    * @throws {TypeError} If the items parameter is not of type V, V array, iterable, Collection, or Record<string, V>.
    */
   constructor(items: CollectionInputType<K, V> = []) {
     this.items = this.getObjectableItems(items);
-
-    return new Proxy(this, {
-      get(target: Collection<K, V>, property: string | symbol) {
-        if (property in target) {
-          // @ts-ignore
-          return target[property];
-        }
-
-        // @ts-ignore
-        return target.get(property);
-      }
-    });
   }
 
-  itCount: K | undefined;
-
   * [Symbol.iterator]() {
-    yield this.get(this.itCount!);
+    yield * this.items;
   }
 
   /**
    * Get all the items in the collection.
    */
   public all(): K extends number ? V[] : Map<K, V> {
-    return (this.isArray() ? this.values().all() : this.items) as K extends number ? V[] : Map<K, V>;
+    return (this.isArray() ? [...this.items.values()] : this.items) as K extends number ? V[] : Map<K, V>;
   }
 
   /**
@@ -106,24 +90,22 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
   /**
    * Create a collection by using this collection for keys and another for its values.
    */
-  public combine<T>(values: T[]) {
-    return new Collection(values.reduce((items: Record<string, T>, value, index) => {
-      // @ts-ignore
-      items[this.get(index.toString())] = value;
-      return items;
-    }, {}));
+  public combine<T>(values: T[] | Collection<any, T>) {
+    const m = new Map();
+    const keys = this.items.values();
+    for (const value of (values instanceof Collection ? values.values().all() : values)) {
+      m.set(keys.next().value, value);
+    }
+    return new Collection(m);
   }
 
   /**
-   * Push all of the given items onto the collection.
+   * Push all the given items onto the collection.
    */
-  // @ts-ignore
-  public concat(source: V[] | Collection<K, V>) {
-    // @ts-ignore
-    const result = new Collection(this);
+  public concat(source: CollectionInputType<K, V>) {
+    const result = new Collection<K, V>(this);
 
-    for (const value of Object.values(this.getObjectableItems(source))) {
-      // @ts-ignore
+    for (const [, value] of this.getObjectableItems(source)) {
       result.push(value);
     }
 
@@ -139,7 +121,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    * @param  value
    * @return boolean
    */
-  public contains(key: ((value: V, key: K) => boolean) | V, operator: any = null, value: any = null): boolean {
+  public contains(key: ((value: V, key: K) => boolean) | V | K, operator: any = null, value: any = null): boolean {
     if (arguments.length === 1) {
       if (typeof key === 'function') {
         let placeholder = {};
@@ -147,10 +129,15 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
         return this.first(key as (value: V, key: K) => boolean, placeholder) !== placeholder;
       }
 
-      return [...this.items.values()].includes(key);
+      return [...this.items.values()].includes(key as V);
     }
 
-    return this.contains(this.operatorForWhere(...arguments));
+    // @ts-expect-error
+    return this.contains(this.operatorForWhere.apply(this, arguments));
+  }
+
+  public containsOneItem() {
+    return this.count() === 1;
   }
 
   /**
@@ -162,6 +149,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    */
   public containsStrict(key: ((item: V) => boolean) | V, value: any = null): boolean {
     if (arguments.length === 2) {
+      // @ts-expect-error
       return this.contains((item: any) => dataGet(item, key) === value);
     }
 
@@ -200,7 +188,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    */
   public diff(items: CollectionInputType<K, V>) {
     const itemsValues = [...this.getObjectableItems(items).values()];
-    return new Collection(this.values().filter((v) => !itemsValues.includes(v)));
+    return new Collection(this.filter((v) => !itemsValues.includes(v)));
   }
 
   /**
@@ -208,7 +196,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    */
   public diffAssoc(items: CollectionInputType<K, V>) {
     const itemsEntries = [...this.getObjectableItems(items).entries()];
-    return new Collection(this.entries().filter((v) => !itemsEntries.includes(v)));
+    return new Collection(this.filter((v, k) => !itemsEntries.some(entry => entry[0] === k && entry[1] === v)));
   }
 
   /**
@@ -216,7 +204,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    */
   public diffKeys(items: CollectionInputType<K, V>) {
     const itemsKeys = [...this.getObjectableItems(items).keys()]
-    return new Collection(this.keys().filter((v) => !itemsKeys.includes(v)));
+    return new Collection(this.filter((_v, k) => !itemsKeys.includes(k)));
   }
 
   /**
@@ -224,10 +212,12 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    *
    * @param item {any} The item to search for.
    * @param item {[string, any]} The entry (key-value pair) of the item to search for.
+   * @param operator
+   * @param value
    * @param item {(value, key) => boolean} Predicate to test every entry
    */
-  public doesntContain(item: V | ((value: V, key: K) => boolean)) {
-    return !this.contains(item);
+  public doesntContain(item: ((value: V, key: K) => boolean) | V | K, operator: any = null, value: any = null) {
+    return !this.contains(item, operator, value);
   }
 
   /**
@@ -284,7 +274,8 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
       return true;
     }
 
-    return this.every(this.operatorForWhere(...arguments));
+    // @ts-expect-error
+    return this.every(this.operatorForWhere.apply(this, arguments));
   }
 
   /**
@@ -312,15 +303,39 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     return value(defaultValue);
   }
 
-  public flatten(depth: number = 1): Collection<number, unknown> {
-    return new Collection(this.values().flatten(depth));
+  public flatten(depth: number = 1): Collection<number> {
+    let result = [];
+
+    for (let [, it] of this) {
+      let item: Map<any, any> | any[] | V = it;
+      if (it instanceof Collection) {
+        item = it.all();
+      }
+
+      if (!(Array.isArray(item) || item instanceof Map)) {
+        result.push(item);
+      } else {
+        let values: any;
+        if (depth === 1) {
+          values = item instanceof Map ? [...item.values()] : Object.values(item);
+        } else {
+          values = Array.isArray(item) ? item.flat(depth - 1) : Object.values(item).flat(depth - 1);
+        }
+
+        for (let value of values) {
+          result.push(value);
+        }
+      }
+    }
+
+    return new Collection<number>(result);
   }
 
   /**
    * Get an item from the collection by key.
    */
   public get(key: K, fallback?: any) {
-    if (key in this.items) {
+    if (this.items.has(key)) {
       return this.items.get(key);
     }
 
@@ -338,12 +353,24 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     return new Collection<number, K>(this.items.keys());
   }
 
+  public last(callback?: (value: V, key: K) => boolean, defaultValue?: unknown) {
+    if (!callback) {
+      return this.values().get(this.count() - 1) ?? value(defaultValue);
+    }
+
+    return this.reverse().first(callback, defaultValue);
+  }
+
   /**
    * Run a map over each of the items.
    */
   public map<T>(callback: (item: V, key: K) => T) {
     const newObject = Object.fromEntries<T>(this.entries().map(([key, item]) => [key, callback(item, key)]));
     return new Collection(newObject);
+  }
+
+  public static make(items: CollectionInputType): Collection {
+    return new Collection(items);
   }
 
   /**
@@ -384,7 +411,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
 
         $highestValue = $sorted->last();
 
-        return $sorted->filter(fn ($value) => $value == $highestValue)
+        return $sorted->filter(fn (value) => value == $highestValue)
       ->sort()->keys()->all();
     */
     let sorted = counts.sort();
@@ -423,6 +450,12 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     return results;
   }
 
+  public push(item: V) {
+    // @ts-ignore - Add item to the end of the collection with a numeric key
+    this.items.set(this.count(), item);
+    return this;
+  }
+
   /**
    * Put an item in the collection by key.
    */
@@ -450,7 +483,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
   /**
    * Reduce the collection to a single value.
    */
-  public reduce<R>(callback: (result: R | undefined, item: V, key: string) => R, initial?: R) {
+  public reduce<R>(callback: (result: R | undefined, item: V, key: K) => R, initial?: R) {
     let result = initial;
 
     for (const [key, item] of this) {
@@ -458,6 +491,10 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     }
 
     return result;
+  }
+
+  public reverse() {
+    return new Collection([...this.items].reverse());
   }
 
   public sort(callback?: (a: V, b: V) => number) {
@@ -473,6 +510,14 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     return this.reduce((result, item) => result as number + (callback(item) as number), 0);
   }
 
+  public toArray() {
+    return this.values().all();
+  }
+
+  public toObject() {
+    return Object.fromEntries(this.items);
+  }
+
   /**
    * Reset the keys on the underlying array.
    */
@@ -484,6 +529,10 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    * Prepare items to be added to the {@link items} property.
    */
   protected getObjectableItems(items: CollectionInputType<K, V>): Map<K, V> {
+    const arrayCase = (value: V[] | [K, V][]) => {
+      return value.every((item) => Array.isArray(item) && item.length == 2) ? new Map(value as [K, V][]) : new Map((value as V[]).map((item, index) => [index as K, item]));
+    };
+
     return match(items)
       .returnType<Map<K, V>>()
       .when((value) => value instanceof Collection, (value: Collection<K, V>) => {
@@ -492,9 +541,8 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
       })
       .when((value) => value instanceof Map, (value: Map<K, V>) => value)
       // .when((value) => value instanceof Set, (value: Set<V>) => new Map<K, V>(value.entries()))
-      .when((value) => Array.isArray(value), (value: V[] | [K, V][]) => {
-        return value.every((item) => Array.isArray(item) && item.length == 2) ? new Map(value as [K, V][]) : new Map((value as V[]).map((item, index) => [index as K, item]));
-      })
+      .when((value) => Array.isArray(value), arrayCase)
+      .when((value) => Symbol.iterator in value, (value: Iterable<V>) => arrayCase([...value]))
       .otherwise((value) => new Map(Object.entries(value)) as Map<K, V>);
   }
 
@@ -502,7 +550,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    * Check if collection represents an array (has numeric indexes).
    */
   protected isArray() {
-    return this.keys().every((key) => !Number.isNaN(Number.parseInt(key, 10)));
+    return this.keys().every((key) => !Number.isNaN(Number.parseInt(String(key), 10)));
   }
 
   /**
@@ -514,5 +562,50 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     }
 
     return (item: V) => dataGet(item, callback as string);
+  }
+
+  /**
+   * Get an operator checker callback.
+   */
+  protected operatorForWhere(key: any, operator?: string, value?: any)
+  {
+    if (typeof key === 'function') {
+      return key;
+    }
+
+    if (arguments.length === 1) {
+      value = true;
+
+      operator = '=';
+    }
+
+    if (arguments.length === 2) {
+      value = operator;
+
+      operator = '=';
+    }
+
+    return (item: unknown) => {
+    const retrieved: any = dataGet(item, key);
+
+    const strings = [retrieved, value].filter((value) => {
+      return typeof value === 'string' || typeof value === 'object';
+    });
+
+    if (strings.length < 2 && [retrieved, value].filter((value) => typeof value === 'object').length == 1) {
+      return ['!=', '<>', '!=='].includes(operator!);
+    }
+
+    return match(operator)
+      .with(P.union('=', '=='), () => retrieved == value)
+      .with(P.union('!=', '<>'), () => retrieved != value)
+      .with('<', () => retrieved < value)
+      .with('>', () => retrieved > value)
+      .with('<=', () => retrieved <= value)
+      .with('>=', () => retrieved >= value)
+      .with('===', () => retrieved === value)
+      .with('!==', () => retrieved !== value)
+      .otherwise(() => retrieved == value)
+    };
   }
 }

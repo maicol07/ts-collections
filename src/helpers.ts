@@ -1,11 +1,9 @@
-import {Collection} from './collection';
+import {Collection, CollectionInputType, CollectionKeyType} from './collection';
 
 /**
  * Create a collection from the given value.
  */
-export function collect<K extends string | number | symbol, V>(
-  items?: V | V[] | Collection<K, V> | Record<string, V>
-) {
+export function collect<K extends CollectionKeyType, V>(items: CollectionInputType<K, V> = []) {
   return new Collection<K, V>(items);
 }
 

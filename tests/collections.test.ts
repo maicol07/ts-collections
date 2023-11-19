@@ -14,21 +14,29 @@ describe('Collections tests', () => {
   });
 
   test('Average returns the average value of a given key', () => {
-    const c = new Collection([
-      {foo: 10},
-      {foo: 10},
-      {foo: 20},
-      {foo: 40},
-    ]);
-    expect(c.average('foo')).toBe(20);
+    const c = new Collection([{foo: 10}, {foo: 20}]);
+    expect(c.avg('foo')).toBe(15);
 
-    const c2 = new Collection([
-      {foo: 10},
-      {foo: 10},
-      {bar: 10},
-      {bar: 20},
-    ]);
-    expect(c2.average('foo')).toBe(10);
+    const c2 = new Collection([{foo: 10}, {foo: 20}, {foo: null}]);
+    expect(c2.avg('foo')).toBe(15);
+
+    const c3 = new Collection([{foo: 10}, {foo: 20}]);
+    expect(c3.avg('foo')).toBe(15);
+
+    const c4 = new Collection([1, 2, 3, 4, 5]);
+    expect(c4.avg()).toBe(3);
+
+    const c5 = new Collection();
+    expect(c5.avg()).toBeNaN();
+
+    const c6 = new Collection([{foo: '4'}, {foo: '2'}]);
+    expect(c6.avg('foo')).toBe(3);
+
+    const c7 = new Collection([{foo: 1}, {foo: 2}]);
+    expect(c7.avg('foo')).toBe(1.5);
+
+    const c8 = new Collection([{foo: 1}, {foo: 2}, {foo: 6}]);
+    expect(c8.avg('foo')).toBe(3);
   });
 
   test('Collapse collapses a Collection of Collections into a single Collection', () => {
@@ -215,6 +223,62 @@ describe('Collections tests', () => {
     expect(c7.doesntContain((value) => !value)).toBeFalsy();
   });
 
+  test('Each', () => {
+    let original = {0: 1, 1: 2, 'foo': 'bar', 'bam': 'baz'};
+    const c = new Collection(original);
+
+    let result: Record<string | number, string | number> = {};
+    c.each((item, key) => {
+      result[key] = item;
+    });
+    expect(result).toStrictEqual(original);
+
+    result = {};
+    c.each((item: any, key: any) => {
+      result[key] = item;
+      if (Number.isNaN(Number.parseInt(key))) { // is a string
+        return false;
+      }
+    });
+    expect(result).toStrictEqual({0: 1, 1: 2, 'foo': 'bar'});
+  });
+
+  test('Every', () => {
+    const c = new Collection([]);
+    // @ts-ignore
+    expect(c.every('key', 'value')).toBe(true);
+    expect(c.every(() => false)).toBe(true);
+
+    const c2 = new Collection([{age: 18}, {age: 20}, {age: 20}]);
+    // @ts-ignore
+    expect(c2.every('age', 18)).toBe(false);
+    // @ts-ignore
+    expect(c2.every('age', '>=', 18)).toBe(true);
+    expect(c2.every((item) => item.age >= 18)).toBe(true);
+    expect(c2.every((item) => item.age >= 20)).toBe(false);
+
+    const c3 = new Collection([null, null]);
+    expect(c3.every((item) => item === null)).toBe(true);
+
+    const c4 = new Collection([{active: true}, {active: true}]);
+    // @ts-ignore
+    expect(c4.every('active')).toBe(true);
+  });
+
+  test('Filter', () => {
+    const c = new Collection([{id: 1, name: 'Hello'}, {id: 2, name: 'World'}]);
+    expect(c.filter(item => item.id == 2).all()).toEqual([{id: 2, name: 'World'}]);
+
+    const c2 = new Collection(['', 'Hello', '', 'World']);
+    expect(c2.filter().values().toArray()).toEqual(['Hello', 'World']);
+
+    const c3 = new Collection({id: 1, first: 'Hello', second: 'World'});
+    expect(c3.filter((item, key) => key !== 'id').toObject()).toEqual({first: 'Hello', second: 'World'});
+
+    const c4 = new Collection([1, 2, 3, null, false, '', 0, []]);
+    expect(c4.filter().all()).toEqual([1, 2, 3]);
+  });
+
   test('First returns first item in Collection', () => {
     const c = new Collection(['foo', 'bar']);
     expect(c.first()).toBe('foo');
@@ -235,6 +299,97 @@ describe('Collections tests', () => {
     expect(c.first(undefined, 'default')).toBe('default');
     const collection = new Collection(['foo', 'bar']);
     expect(collection.first(undefined, 'default')).toBe('foo');
+  });
+
+  test('Flatten', () => {
+    // Flat arrays are unaffected
+    const c = new Collection(['#foo', '#bar', '#baz']);
+    expect(c.flatten().all()).toStrictEqual(['#foo', '#bar', '#baz']);
+
+    // Nested arrays are flattened with existing flat items
+    const c2 = new Collection(['#foo', ['#bar', '#baz']]);
+    expect(c2.flatten().all()).toStrictEqual(['#foo', '#bar', '#baz']);
+
+    // Sets of nested arrays are flattened
+    const c3 = new Collection([['#foo', '#bar'], ['#baz']]);
+    expect(c3.flatten().all()).toStrictEqual(['#foo', '#bar', '#baz']);
+
+    // Deeply nested arrays are flattened
+    const c4 = new Collection([['#foo', ['#bar']], ['#baz']]);
+    expect(c4.flatten().all()).toStrictEqual(['#foo', '#bar', '#baz']);
+
+    // Nested collections are flattened alongside arrays
+    const c5 = new Collection([new Collection(['#foo', '#bar']), ['#baz']]);
+    expect(c5.flatten().all()).toStrictEqual(['#foo', '#bar', '#baz']);
+
+    // Nested collections containing plain arrays are flattened
+    const c6 = new Collection([new Collection(['#foo', ['#bar']]), ['#baz']]);
+    expect(c6.flatten().all()).toStrictEqual(['#foo', '#bar', '#baz']);
+
+    // Nested arrays containing collections are flattened
+    const c7 = new Collection([['#foo', new Collection(['#bar'])], ['#baz']]);
+    expect(c7.flatten().all()).toStrictEqual(['#foo', '#bar', '#baz']);
+
+    // Nested arrays containing collections containing arrays are flattened
+    const c8 = new Collection([['#foo', new Collection(['#bar', ['#zap']])], ['#baz']]);
+    expect(c8.flatten().all()).toStrictEqual(['#foo', '#bar', '#zap', '#baz']);
+  });
+
+  test('Flatten ignores keys', () => {
+    // No depth ignores keys
+    let c = new Collection(['#foo', {'key': '#bar'}, {'key': '#baz'}, {'key': '#zap'}]);
+    expect(c.flatten().all()).toStrictEqual(['#foo', '#bar', '#baz', '#zap']);
+
+    // Depth of 1 ignores keys
+    c = new Collection(['#foo', {'key': '#bar'}, {'key': '#baz'}, {'key': '#zap'}]);
+    expect(c.flatten(1).all()).toStrictEqual(['#foo', '#bar', '#baz', '#zap']);
+  });
+
+  test('Flatten with depth', () => {
+    // No depth flattens recursively
+    const c = new Collection([['#foo', ['#bar', ['#baz']]], '#zap']);
+    expect(c.flatten().all()).toEqual(['#foo', '#bar', '#baz', '#zap']);
+
+    // Specifying a depth only flattens to that depth
+    const c2 = new Collection([['#foo', ['#bar', ['#baz']]], '#zap']);
+    expect(c2.flatten(1).all()).toEqual(['#foo', ['#bar', ['#baz']], '#zap']);
+
+    const c3 = new Collection([['#foo', ['#bar', ['#baz']]], '#zap']);
+    expect(c3.flatten(2).all()).toEqual(['#foo', '#bar', ['#baz'], '#zap']);
+  });
+
+  test('Get with callback as default value', () => {
+    let data = new Collection<string, string>({name: 'taylor', framework: 'laravel'});
+    let result = data.get('email', () => 'taylor@example.com');
+    expect(result).toBe('taylor@example.com');
+  });
+
+  test('Get with default value', () => {
+    let data = new Collection<string, string>({name: 'taylor', framework: 'laravel'});
+    expect(data.get('age', 34)).toBe(34);
+  });
+
+  test('Get with undefined returns undefined', () => {
+    let data = new Collection<string, string>({name: 'taylor', framework: 'laravel'});
+    // @ts-expect-error
+    expect(data.get(undefined)).toBe(undefined);
+  });
+
+  test('Has', () => {
+    let data = new Collection<string, string | number>({id: 1, first: 'Hello', second: 'World'});
+
+    expect(data.has('first')).toBe(true);
+    expect(data.has('third')).toBe(false);
+    expect(data.has('first', 'second')).toBe(true);
+    expect(data.has('third', 'first')).toBe(false);
+  });
+
+  test('Keys', () => {
+    const c = new Collection({name: 'taylor', framework: 'laravel'});
+    expect(c.keys().all()).toStrictEqual(['name', 'framework']);
+
+    const c2 = new Collection(['taylor', 'laravel']);
+    expect(c2.keys().all()).toStrictEqual([0, 1]);
   });
 
   test('Last returns last item in Collection', () => {
@@ -262,5 +417,197 @@ describe('Collections tests', () => {
   test('Last with default and without callback', () => {
     const c = new Collection();
     expect(c.last(undefined, 'default')).toBe('default');
+  });
+
+  test('Make method', () => {
+    const data = Collection.make('foo');
+    expect(data.all()).toEqual(['foo']);
+  });
+
+  test('Make method from undefined', () => {
+    let data = Collection.make(undefined);
+    expect(data.all()).toEqual([]);
+    data = Collection.make();
+    expect(data.all()).toEqual([]);
+  });
+
+  test('Make method from collection', () => {
+    const firstCollection = Collection.make({foo: 'bar'});
+    const secondCollection = Collection.make(firstCollection);
+    expect(secondCollection.toObject()).toEqual({foo: 'bar'});
+  });
+
+  test('Make method from array', () => {
+    const data = Collection.make({foo: 'bar'});
+    expect(data.toObject()).toEqual({foo: 'bar'});
+  });
+
+  test('Map', () => {
+    const c = new Collection([1, 2, 3]);
+    const mapped = c.map((item) => item * 2);
+    expect(mapped.all()).toStrictEqual([2, 4, 6]);
+    expect(c.all()).toStrictEqual([1, 2, 3]);
+
+    let c2 = new Collection<string, string>({first: 'taylor', last: 'otwell'});
+    c2 = c2.map((item, key) => key + '-' + item);
+    expect(c2.toObject()).toStrictEqual({first: 'first-taylor', last: 'last-otwell'});
+  });
+
+  test('Median with even in collection', () => {
+    const data = new Collection([
+      {'foo': 0},
+      {'foo': 3},
+    ]);
+    expect(data.median('foo')).toBe(1.5);
+  });
+
+  test('Median on collection with undefined', () => {
+    const data = new Collection([
+      {'foo': 1},
+      {'foo': 2},
+      {'foo': 4},
+      {'foo': undefined},
+    ]);
+    expect(data.median('foo')).toBe(2);
+  });
+
+  test('Median on empty collection', () => {
+    const data = new Collection();
+    expect(data.median()).toBeNaN();
+  });
+
+  test('Median out of order collection', () => {
+    const data = new Collection([
+      {'foo': 0},
+      {'foo': 5},
+      {'foo': 3},
+    ]);
+    expect(data.median('foo')).toBe(3);
+  });
+
+  test('Median value by key', () => {
+    const data = new Collection([
+      {'foo': 1},
+      {'foo': 2},
+      {'foo': 2},
+      {'foo': 4},
+    ]);
+    expect(data.median('foo')).toBe(2);
+  });
+
+  test('Median value with array collection', () => {
+    const data = new Collection([1, 2, 2, 4]);
+    expect(data.median()).toBe(2);
+  });
+
+  test('Mode', () => {
+    const data = new Collection([1, 2, 3, 4, 4, 5]);
+    expect(data.mode()).toStrictEqual([4]);
+  });
+
+  test('Mode on empty collection', () => {
+    const data = new Collection();
+    expect(data.mode()).toStrictEqual([]);
+  });
+
+  test('Mode value by key', () => {
+    let data = new Collection([
+      {foo: 1},
+      {foo: 1},
+      {foo: 2},
+      {foo: 4},
+    ]);
+
+    let data2 = new Collection([
+      {foo: 1},
+      {foo: 1},
+      {foo: 2},
+      {foo: 4},
+    ]);
+
+    expect(data.mode('foo')).toEqual([1]);
+    expect(data2.mode('foo')).toEqual(data.mode('foo'));
+  });
+
+  test('Mode multiple values', () => {
+    const data = new Collection([1, 2, 2, 1]);
+    expect(data.mode()).toStrictEqual([1, 2]);
+  });
+
+  test('Pluck duplicates keys exists', () => {
+    const data = new Collection([
+      {brand: 'Tesla', color: 'red'},
+      {brand: 'Pagani', color: 'white'},
+      {brand: 'Tesla', color: 'black'},
+      {brand: 'Pagani', color: 'orange'},
+    ]);
+
+    expect(data.pluck('color', 'brand').toObject()).toStrictEqual({Tesla: 'black', Pagani: 'orange'});
+  });
+
+  test('Pluck with array and object values', () => {
+    const data = new Collection([{name: 'taylor', email: 'foo'}, {name: 'dayle', email: 'bar'}]);
+    expect(data.pluck('email', 'name').toObject()).toStrictEqual({taylor: 'foo', dayle: 'bar'});
+    expect(data.pluck('email').all()).toStrictEqual(['foo', 'bar']);
+  });
+
+  test('Pluck with dot notation', () => {
+    let data = new Collection([
+      {
+        name: 'amir',
+        skill: {
+          backend: ['php', 'python'],
+        },
+      },
+      {
+        name: 'taylor',
+        skill: {
+          backend: ['php', 'asp', 'java'],
+        },
+      },
+    ]);
+
+    expect(data.pluck('skill.backend').all()).toStrictEqual([['php', 'python'], ['php', 'asp', 'java']]);
+  });
+
+  test('Push with multiple item', () => {
+    const expected = [4, 5, 6, 'Johnny', 'from', 'Laroe', 'Johnny', 'from', 'Laroe', 'a', 'b', 'c'];
+    const c = new Collection<string, number | string>([4, 5, 6]);
+    c.push('Johnny', 'from', 'Laroe');
+    c.push(...Object.values({11: 'Johnny', 12: 'from', 13: 'Laroe'}));
+    c.push(...collect(['a', 'b', 'c']).values().toArray());
+    const actual = c.push(...[]).toArray();
+
+    expect(actual).toStrictEqual(expected);
+  });
+
+  test('Push with one item', () => {
+    const expected = [4, 5, 6, ['a', 'b', 'c'], {who: 'Jonny', preposition: 'from', where: 'Laroe'}, 'Johnny from Laroe'];
+    const c = new Collection<string, number | string | string[] | Record<string, string>>([4, 5, 6]);
+    c.push(['a', 'b', 'c']);
+    c.push({who: 'Jonny', preposition: 'from', where: 'Laroe'});
+    const actual = c.push('Johnny from Laroe').toArray();
+    expect(actual).toStrictEqual(expected);
+  });
+
+  test('Put', () => {
+    const c = new Collection({name: 'taylor', email: 'foo'});
+    expect(c.put('name', 'dayle').toObject()).toStrictEqual({name: 'dayle', email: 'foo'});
+  });
+
+  test('Put adds item to collection', () => {
+    const c = new Collection();
+    expect(c.toArray()).toStrictEqual([]);
+    c.put('foo', 1);
+    expect(c.toObject()).toStrictEqual({foo: 1});
+    c.put('bar', {nested: 'two'});
+    expect(c.toObject()).toStrictEqual({foo: 1, bar: {nested: 'two'}});
+    c.put('foo', 3);
+    expect(c.toObject()).toStrictEqual({foo: 3, bar: {nested: 'two'}});
+  });
+
+  test('Put with no key', () => {
+    const c = new Collection(['taylor', 'shadwn']);
+    expect(c.put(undefined, 'dayle').toArray()).toStrictEqual(['taylor', 'shadwn', 'dayle']);
   });
 });

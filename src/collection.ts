@@ -50,7 +50,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
 
     const count = items.count();
     if (count) {
-      return items.sum() as number / count;
+      return items.sum() / count;
     }
 
     return Number.NaN;
@@ -283,7 +283,10 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    * Run a filter over each of the items.
    */
   public filter(callback?: (value: V, key: K) => boolean): Collection<K, V> {
-    return new Collection(this.entries().filter(([key, value]) => callback ? callback(value, key) : Boolean(value)));
+    return new Collection(
+      this.entries()
+        .filter(([key, value]) => callback ? callback(value, key) : (Boolean(value) && (typeof value === 'object' ? (value as any).length > 0 : true)))
+    );
   }
 
   public first<D>(callback?: (value: V, key: K) => boolean, defaultValue?: D | (() => D)): V | D | undefined {
@@ -304,7 +307,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     return value(defaultValue);
   }
 
-  public flatten(depth: number = 1): Collection<number> {
+  public flatten(depth: number = Infinity): Collection<number> {
     let result = [];
 
     for (let [, it] of this) {
@@ -313,7 +316,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
         item = it.all();
       }
 
-      if (!(Array.isArray(item) || item instanceof Map)) {
+      if (typeof item !== 'object' || item === null) {
         result.push(item);
       } else {
         let values: any;
@@ -324,7 +327,15 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
         }
 
         for (let value of values) {
-          result.push(value);
+          // noinspection SuspiciousTypeOfGuard - False positive
+          if (value instanceof Collection) {
+            value = value.flatten(depth - 1);
+            for (let [, v] of value) {
+              result.push(v);
+            }
+          } else {
+            result.push(value);
+          }
         }
       }
     }
@@ -343,8 +354,8 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     return value(fallback);
   }
 
-  public has(key: K) {
-    return this.items.has(key);
+  public has(...keys: K[]) {
+    return keys.every((key) => this.items.has(key as K));
   }
 
   /**
@@ -366,11 +377,11 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    * Run a map over each of the items.
    */
   public map<T>(callback: (item: V, key: K) => T) {
-    const newObject = Object.fromEntries<T>(this.entries().map(([key, item]) => [key, callback(item, key)]));
+    const newObject = Object.fromEntries<T>(this.entries().map(([key, item]) => [key, callback(item, key)])) as Record<K, T>;
     return new Collection(newObject);
   }
 
-  public static make(items: CollectionInputType): Collection {
+  public static make<K extends CollectionKeyType = string, V = unknown>(items: CollectionInputType<K, V> = []) {
     return new Collection(items);
   }
 
@@ -380,7 +391,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
 
   public median(key?: K) {
     const values = (key ? this.pluck(key) : this)
-      .filter()
+      .filter((v) => !Number.isNaN(Number.parseFloat(v as string)))
       .sort()
       .values();
     const count = values.count();
@@ -400,27 +411,19 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
 
   public mode(key?: K) {
     if (this.count() === 0) {
-      return Number.NaN;
+      return [];
     }
 
     const collection: Collection<any, any> = key ? this.pluck(key) : this;
     const counts = new Collection<number, number>();
-    collection.each((value) => counts[value] = counts[value] ? counts[value] + 1 : 1);
+    collection.each((value) => counts.put(value, counts.get(value) ? counts.get(value) + 1 : 1));
 
-    /*
-        $sorted = $counts->sort();
-
-        $highestValue = $sorted->last();
-
-        return $sorted->filter(fn (value) => value == $highestValue)
-      ->sort()->keys()->all();
-    */
     let sorted = counts.sort();
 
     let highestValue: number = sorted.last();
 
     return sorted.filter((value: number) => value == highestValue)
-      .sort().map((value, index) => index);
+      .sort().keys().toArray();
   }
 
   public pluck(value: string | number, key?: string | number) {
@@ -429,16 +432,16 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     const v = typeof value === 'string' ? value.split('.') : value;
     const k = typeof key === 'string' ? key.split('.') : key;
 
-    for (let [, item] of this.items) {
-      let itemValue = dataGet(item, value);
+    for (let [, item] of this) {
+      let itemValue = dataGet(item, v);
 
       // If the key is "null", we will just append the value to the array and keep
       // looping. Otherwise, we will key the array using the value of the key we
       // received from the developer. Then we'll return the final array form.
       if (!key) {
-        results.put('0', itemValue);
+        results.push(itemValue);
       } else {
-        let itemKey = dataGet(item, key) as string | object;
+        let itemKey = dataGet(item, k) as string | object;
 
         if (itemKey && typeof itemKey === "object") {
           itemKey = itemKey.toString();
@@ -451,16 +454,21 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     return results;
   }
 
-  public push(item: V) {
-    // @ts-ignore - Add item to the end of the collection with a numeric key
-    this.items.set(this.count(), item);
+  public push(...items: V[]) {
+    for (const item of items) {
+      this.items.set(this.count() as K, item);
+    }
     return this;
   }
 
   /**
    * Put an item in the collection by key.
    */
-  public put(key: K, newValue: V) {
+  public put(key: K | undefined, newValue: V) {
+    if (key === undefined) {
+      return this.push(newValue);
+    }
+
     if (this.isArray() && Number.isNaN(Number.parseInt(key as string, 10))) {
       this.items = new Map();
     }
@@ -499,7 +507,10 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
   }
 
   public sort(callback?: (a: V, b: V) => number) {
-    return new Collection<K, V>(this.entries().sort(((a, b) => callback ? callback(a[1], b[1]) : String(a[1]).localeCompare(String(b[1])))));
+    return new Collection<K, V>(
+      this.entries()
+        .sort((a, b) => callback ? callback(a[1], b[1]) : String(a[1]).localeCompare(String(b[1])))
+    );
   }
 
   /**
@@ -508,7 +519,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
   public sum(mapper?: ((item: V) => number) | string) {
     const callback = mapper === undefined ? (item: V) => item : this.valueRetriever(mapper);
 
-    return this.reduce((result, item) => result as number + (callback(item) as number), 0);
+    return this.reduce((result, item) => result! + (Number.parseFloat(callback(item))), 0)!;
   }
 
   public toArray() {
@@ -517,6 +528,10 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
 
   public toObject() {
     return Object.fromEntries(this.items);
+  }
+
+  public toMap() {
+    return new Map(this.items);
   }
 
   /**
@@ -536,6 +551,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
 
     return match(items)
       .returnType<Map<K, V>>()
+      .when((value) => typeof value !== 'object', (value) => new Map([[0, value]]) as Map<K, V>)
       .when((value) => value instanceof Collection, (value: Collection<K, V>) => {
         const values = value.all();
         return Array.isArray(values) ? new Map(values.map((item, index) => [index as K, item])) : this.getObjectableItems(values);

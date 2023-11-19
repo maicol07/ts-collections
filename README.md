@@ -129,7 +129,7 @@ There are some little differences between Laravel Collections and TS Collections
 * [ ] pop
 * [ ] prepend
 * [ ] pull
-* [ ] push
+* [x] push
 * [x] put
 * [ ] random
 * [x] range

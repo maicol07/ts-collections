@@ -344,7 +344,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
   }
 
   public has(key: K) {
-    return key in this.items;
+    return this.items.has(key);
   }
 
   /**

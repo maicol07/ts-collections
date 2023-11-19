@@ -104,8 +104,11 @@ export function dataGet(
     if (isAccessible(target) && exists(target, segment)) {
       if (Array.isArray(target)) {
         target = target[Number.parseInt(segment, 10)];
+      } else if (target instanceof Collection) {
+        target = target.get(segment);
+      } else {
+        target = (target as Record<any, any>)[segment];
       }
-      target = (target as Record<any, any>)[segment];
     } else {
       return value(fallback);
     }

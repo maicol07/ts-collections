@@ -121,8 +121,9 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    * @param  value
    * @return boolean
    */
-  public contains(key: ((value: V, key: K) => boolean) | V | K, operator: any = null, value: any = null): boolean {
-    if (arguments.length === 1) {
+  public contains(key: ((value: V, key: K) => boolean) | V | K, operator?: any, value?: any): boolean {
+    const args = [...arguments].filter(arg => arg !== undefined)
+    if (args.length === 1) {
       if (typeof key === 'function') {
         let placeholder = {};
 
@@ -133,7 +134,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
     }
 
     // @ts-expect-error
-    return this.contains(this.operatorForWhere.apply(this, arguments));
+    return this.contains(this.operatorForWhere.apply(this, args));
   }
 
   public containsOneItem() {
@@ -216,7 +217,7 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    * @param value
    * @param item {(value, key) => boolean} Predicate to test every entry
    */
-  public doesntContain(item: ((value: V, key: K) => boolean) | V | K, operator: any = null, value: any = null) {
+  public doesntContain(item: ((value: V, key: K) => boolean) | V | K, operator?: any, value?: any) {
     return !this.contains(item, operator, value);
   }
 

@@ -610,4 +610,90 @@ describe('Collections tests', () => {
     const c = new Collection(['taylor', 'shadwn']);
     expect(c.put(undefined, 'dayle').toArray()).toStrictEqual(['taylor', 'shadwn', 'dayle']);
   });
+
+  test('Range', () => {
+    expect(Collection.range(1, 5).all()).toStrictEqual([1, 2, 3, 4, 5]);
+    expect(Collection.range(-2, 2).all()).toStrictEqual([-2, -1, 0, 1, 2]);
+    expect(Collection.range(-4, -2).all()).toStrictEqual([-4, -3, -2]);
+    expect(Collection.range(5, 1).all()).toStrictEqual([5, 4, 3, 2, 1]);
+    expect(Collection.range(2, -2).all()).toStrictEqual([2, 1, 0, -1, -2]);
+    expect(Collection.range(-2, -4).all()).toStrictEqual([-2, -3, -4]);
+    expect(Collection.range(0, 5, 2).all()).toStrictEqual([0, 2, 4]);
+    expect(Collection.range(5, 0, 2).all()).toStrictEqual([5, 3, 1]);
+  });
+
+  test('Reduce', () => {
+    const data = new Collection([1, 2, 3]);
+    expect(data.reduce<number>((carry, element) => carry! += element)).toEqual(6);
+
+    const data2 = new Collection({
+      'foo': 'bar',
+      'baz': 'qux',
+    });
+    expect(data2.reduce((carry, element, key) => carry += key + element, '')).toBe('foobarbazqux');
+  });
+
+  test('Reverse', () => {
+    const data = new Collection(['zaeed', 'alan']);
+    const reversed = data.reverse();
+    expect(reversed.all()).toStrictEqual(['alan', 'zaeed']);
+
+    const data2 = new Collection({name: 'taylor', framework: 'laravel'});
+    const reversed2 = data2.reverse();
+    expect(reversed2.toObject()).toStrictEqual({'framework': 'laravel', 'name': 'taylor'});
+  });
+
+  test('Sort', () => {
+    const data = (new Collection([5, 3, 1, 2, 4])).sort();
+    expect(data.values().all()).toStrictEqual([1, 2, 3, 4, 5]);
+
+    const data2 = (new Collection([-1, -3, -2, -4, -5, 0, 5, 3, 1, 2, 4])).sort();
+    expect(data2.values().all()).toStrictEqual([-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]);
+
+    const data3 = (new Collection(['foo', 'bar-10', 'bar-1'])).sort();
+    expect(data3.values().all()).toStrictEqual(['bar-1', 'bar-10', 'foo']);
+
+    const data4 = (new Collection(['T2', 'T1', 'T10'])).sort();
+    expect(data4.values().all()).toStrictEqual(['T1', 'T10', 'T2']);
+  });
+
+  test('Sort with callback', () => {
+    const data = (new Collection([5, 3, 1, 2, 4])).sort((a, b) => {
+      if (a === b) {
+        return 0;
+      }
+
+      return (a < b) ? -1 : 1;
+    });
+    expect(data.values().all()).toStrictEqual([1, 2, 3, 4, 5]);
+  });
+
+  test('Sum', () => {
+    const data = new Collection([1, 2, 3, 4, 5]);
+    expect(data.sum()).toBe(15);
+  });
+
+  test('Sum with empty collection', () => {
+    const data = new Collection();
+    expect(data.sum()).toBe(0);
+  });
+
+  test('Sum with parameter', () => {
+    let c = new Collection([{foo: 50}, {foo: 50}]);
+    expect(c.sum('foo')).toEqual(100);
+
+    c = new Collection([{foo: 50}, {foo: 50}]);
+    expect(c.sum((i) => i.foo)).toEqual(100);
+  });
+
+  test('Values', () => {
+    const collection = new Collection([{id: 1, name: 'Hello'}, {id: 2, name: 'World'}]);
+    expect(collection.filter(item => item.id == 2).values().all()).toStrictEqual([{id: 2, name: 'World'}]);
+  });
+
+  test('Values reset keys', () => {
+    let data = new Collection({1: 'a', 2: 'b', 3: 'c'});
+    expect(data.values().all()).toStrictEqual(['a', 'b', 'c']);
+    expect(data.values().toObject()).toStrictEqual({0: 'a', 1: 'b', 2: 'c'});
+  });
 });

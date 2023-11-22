@@ -484,15 +484,17 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
    * @return static
    */
   public static range(start: number, stop: number, step = 1) {
-    return new Collection(
-      Array.from({length: (stop - start) / step + 1}, (_, index) => start + (index * step))
-    );
+    const first = start > stop ? stop : start;
+    const last = start > stop ? start : stop;
+
+    const values = Array.from({length: (last - first) / step + 1}, start > stop ? (_, index) => last - (index * step) : (_, index) => first + (index * step));
+    return new Collection(values);
   }
 
   /**
    * Reduce the collection to a single value.
    */
-  public reduce<R>(callback: (result: R | undefined, item: V, key: K) => R, initial?: R) {
+  public reduce<R>(callback: (result: R | null, item: V, key: K) => R, initial: R | null = null) {
     let result = initial;
 
     for (const [key, item] of this) {
@@ -507,9 +509,17 @@ export class Collection<K extends CollectionKeyType = string, V = unknown> imple
   }
 
   public sort(callback?: (a: V, b: V) => number) {
+    const sorter = ([, aValue]: [K, V], [, bValue]: [K, V]) => {
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return aValue - bValue;
+      }
+
+      return String(aValue).localeCompare(String(bValue))
+    }
+
     return new Collection<K, V>(
       this.entries()
-        .sort((a, b) => callback ? callback(a[1], b[1]) : String(a[1]).localeCompare(String(b[1])))
+        .sort((a, b) => callback ? callback(a[1], b[1]) : sorter(a, b))
     );
   }
 

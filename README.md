@@ -138,7 +138,7 @@ There are some little differences between Laravel Collections and TS Collections
 * [ ] reject
 * [ ] replace
 * [ ] replaceRecursive
-* [ ] reverse
+* [x] reverse
 * [ ] search
 * [ ] shift
 * [ ] shuffle

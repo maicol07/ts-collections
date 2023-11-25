@@ -103,7 +103,7 @@ describe('Collections tests', () => {
   });
 
   test('Concat with collection', () => {
-    let data = new Collection<number, number | string>([4, 5, 6]);
+    let data = new Collection<string & number, number | string>([4, 5, 6]);
     data = data.concat(new Collection(['a', 'b', 'c']));
     data = data.concat(new Collection({who: 'Jonny', preposition: 'from', where: 'Laroe'}));
     let actual = data.concat(new Collection({who: 'Jonny', preposition: 'from', where: 'Laroe'})).toObject();

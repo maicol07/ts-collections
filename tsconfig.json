@@ -21,8 +21,6 @@
     "**/.*/"
   ],
   "include": [
-    "src/index.ts",
-    "tests/**/*.ts",
-    "jest.config.ts"
+    "src/index.ts"
   ]
 }

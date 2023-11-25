@@ -686,6 +686,30 @@ describe('Collections tests', () => {
     expect(c.sum((i) => i.foo)).toEqual(100);
   });
 
+  test('To array', () => {
+    const c = new Collection(['foo', 'bar']);
+    expect(c.toArray()).toStrictEqual(['foo', 'bar']);
+
+    const c2 = new Collection({name: 'taylor', framework: 'laravel'});
+    expect(c2.toArray()).toStrictEqual(['taylor', 'laravel']);
+  });
+
+  test('To object', () => {
+    const c = new Collection(['foo', 'bar']);
+    expect(c.toObject()).toStrictEqual({0: 'foo', 1: 'bar'});
+
+    const c2 = new Collection({name: 'taylor', framework: 'laravel'});
+    expect(c2.toObject()).toStrictEqual({name: 'taylor', framework: 'laravel'});
+  });
+
+  test('To map', () => {
+    const c = new Collection(['foo', 'bar']);
+    expect(c.toMap()).toStrictEqual(new Map([[0, 'foo'], [1, 'bar']]));
+
+    const c2 = new Collection({name: 'taylor', framework: 'laravel'});
+    expect(c2.toMap()).toStrictEqual(new Map([['name', 'taylor'], ['framework', 'laravel']]));
+  });
+
   test('Values', () => {
     const collection = new Collection([{id: 1, name: 'Hello'}, {id: 2, name: 'World'}]);
     expect(collection.filter(item => item.id == 2).values().all()).toStrictEqual([{id: 2, name: 'World'}]);

@@ -4,6 +4,8 @@
 </div>
 
 ## Why?
+I love Laravel Collections and I wanted to use them in my TS projects.
+I tried to find a library that implements them with a good support for JS objects, but I couldn't find any that satisfied my needs, so I decided to create my own.
 
 ## Differences between Laravel Collections and TS Collections
 
@@ -11,45 +13,18 @@ There are some little differences between Laravel Collections and TS Collections
 
 - All names are camelCase (following JS coding standards)
 
-### Helpers
-
-- When you use a fallback value and the value you are trying to get is undefined, you will get the fallback value.
-  Example:
-
-  ```ts
-  const data = {
-    name: 'John Doe',
-    age: undefined,
-    address: {
-      city: 'New York',
-      country: 'USA'
-    }
-  }
-
-  dataGet(data, 'age', 'fallback')
-  // => 'fallback'
-  ```
-
-  The same applies to all the Collection methods that use this helper.
-
-### Collections
-
+### Differences between `ts-collections` and Laravel Collections
 - There are some new methods:
   - `entries`
-  - `isArray`
+  - `toObject`
+  - `toMap`
+  - `isArray` (protected)
 - Currently, lazy collections aren't implemented.
 - Due to the difference above, you can't use the following Laravel methods on your Collection:
   - `chunkWhile`
   - `countBy`
-- There are some changes inn the API of these methods:
-  - `contains`: Instead of Laravel approach, this method will accept only one argument (`item`) that can be one of these values:
-    - The item to test for
-    - A function that will be called for each item in the collection and return true if the item matches
-    - An entry (key-value pair) of the item to search in the collection
-- The following methods have not been implemented since they are already implemented in other methods or are natively supported by JS/TS:
-  - `containsStrict` (since `contains` already does strict checks, following JS best practices)
 
-## WIP Status
+## Development Status
 * [x] all
 * [x] average
 * [x] avg

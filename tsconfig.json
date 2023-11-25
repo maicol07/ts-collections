@@ -6,7 +6,7 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "node",
-    "inlineSourceMap": true,
+    "inlineSources": true,
     "strict": true,
     "sourceMap": true,
     "esModuleInterop": true,

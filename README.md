@@ -20,11 +20,16 @@ There are some little differences between Laravel Collections and TS Collections
   - `toMap`
   - `isArray` (protected)
 - Currently, lazy collections aren't implemented.
+- Currently, macros aren't implemented.
+- Currently, higher order messages aren't implemented.
 - Due to the difference above, you can't use the following Laravel methods on your Collection:
   - `chunkWhile`
   - `countBy`
 
 ## Development Status
+Planned releases here:
+https://github.com/users/maicol07/projects/4/views/1
+
 * [x] all
 * [x] average
 * [x] avg
@@ -140,7 +145,7 @@ There are some little differences between Laravel Collections and TS Collections
 * [ ] takeWhile
 * [ ] tap
 * [ ] times
-* [ ] toArray
+* [x] toArray
 * [ ] toJson
 * [ ] transform
 * [ ] undot

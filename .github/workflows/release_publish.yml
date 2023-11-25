@@ -1,0 +1,16 @@
+name: Release & Publish
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release_publish:
+    uses: maicol07/actions/.github/workflows/release_publish.yml@main
+    with:
+      release_channel: ${{ github.event.inputs.release_channel }}
+    secrets: inherit

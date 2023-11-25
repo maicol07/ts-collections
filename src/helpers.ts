@@ -2,6 +2,9 @@ import {Collection, CollectionInputType, CollectionKeyType} from './collection';
 
 /**
  * Create a collection from the given value.
+ *
+ * @typeParam K - The type of the collection keys.
+ * @typeParam V - The type of the collection values.
  */
 export function collect<K extends CollectionKeyType, V>(items: CollectionInputType<K, V> = []) {
   return new Collection<K, V>(items);

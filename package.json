@@ -1,5 +1,5 @@
 {
-  "name": "ts-collections",
+  "name": "@maicol07/ts-collections",
   "version": "1.0.0",
   "description": "Collections for array and objects data. Heavily faithful to Laravel implementation.",
   "packageManager": "pnpm@8.10.1",
